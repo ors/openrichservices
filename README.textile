@@ -18,11 +18,15 @@ Build the project:
 
 @lein uberjar@
 
-Then launch a repl (or swank):
+Then give the following at the command line:
+
+@java -cp rich-services-1.0.0-SNAPSHOT-standalone.jar clojure.main@
+
+Alternatively, launch a repl (or swank):
 
 @lein swank@ (note: you'll need lein 1.2 or greater if you want to use @lein repl@)
 
-and deploy the adl1 example rich-service instances:
+Next, deploy the adl1 example rich-service instances:
 
 @(use 'examples.adl1)@
 @(deploy-example-nodes)@
