@@ -57,7 +57,7 @@
   (let [fns (map #(create-service-controller %) services)]
     (fn [message]
       (apply merge-rs-message-responses
-	     (map (fn [f] (f message)) fns)))))
+	     (pmap (fn [f] (f message)) fns)))))
 
 (defn if-then
   ([test-services then-services]
