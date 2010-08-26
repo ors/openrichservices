@@ -1,0 +1,10 @@
+*jar
+lib
+classes
+log
+.#*
+*~
+modules/*
+*.swp
+euca*
+

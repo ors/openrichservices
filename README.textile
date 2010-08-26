@@ -1,0 +1,35 @@
+h1. Rich-Services Infrastructure
+
+An implementation of a Rich-Services Infrastructure.
+
+h2. Demo Usage
+
+Download and install the Leiningen (v1.3) build tool for Clojure:
+
+@wget http://github.com/technomancy/leiningen/raw/stable/bin/lein@
+@chmod +x lein@
+@lein self-install@
+
+Download the OpenRichServices project dependencies:
+
+@lein deps@
+
+Build the project:
+
+@lein uberjar@
+
+Then launch a repl (or swank):
+
+@lein swank@ (note: you'll need lein 1.2 or greater if you want to use @lein repl@)
+
+and deploy the adl1 example rich-service instances:
+
+@(use 'examples.adl1)@
+@(deploy-example-nodes)@
+
+And exercise the services
+
+@(test-services)@
+
+
+
