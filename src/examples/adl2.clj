@@ -14,50 +14,68 @@
 
 (def cell-power-state (ref 100))
 
-(def cell-phone (rich-service 
-		 
-		 (app-services
-		  :ls (conj-resp :local-store-called)
-		  :lc (conj-resp :local-compute-called)
-		  :display (fn [_] 
-			        (do (info (str "value arrived @ " (java.util.Date.) " with cell-power-state " @cell-power-state) )
-			            :cell-display-called))
-		  :sense (|| :store (compose :compute :display)))
-		 
-		 (infra-services
-		  :encrypt (conj-resp :encrypt-called)
-		  :decrypt (conj-resp :decrypt-called)
-		  :power-high (fn [_] (> @cell-power-state 50))
-		  :power-low (fn [_] (<= 20 @cell-power-state 50))
-		  :power-vlow (fn [_] (< @cell-power-state 20))
-		  :store (conj-resp :basic-store-called)
-		  :compute (conj-resp :basic-compute-called)
-		  :rs (conj-resp :remote-store-called)
-		  :rc (conj-resp :remote-compute-called)
-		  :skip (conj-resp :skip-called))
-		 
-		 (transforms
-		  :rs (pre :encrypt)
-		  :rc (pre-post :encrypt :decrypt)
-		  :store (bind (cond-flow :power-high (|| :ls :rs)
-					  :power-low :ls
-					  :power-vlow :skip))
-		  :compute (bind (cond-flow :power-high :lc
-					    :power-low :rc
-					    :power-vlow :skip)))
-		(schedule
-		  :power-drain (every :minute 
-			             (fn [_]
-			               (dosync (if (>= @cell-power-state 20)
-			                         (do (ref-set cell-power-state (- @cell-power-state 20))
-			                             :power-drained-by-20)
-			                         :power-too-low)))))))
+(def cell-phone 
+  (rich-service 
+    (app-services
+      :ls (conj-resp :local-store-called)
+      :lc (conj-resp :local-compute-called)
+      :display 
+        (fn [_] 
+            (do (info (str "value arrived @ " (java.util.Date.) " with cell-power-state " @cell-power-state) )
+                :cell-display-called))
+    :sense 
+      (|| :store (compose :compute :display)))
 
-(def sensor (rich-service (app-services
-			   :compute (conj-resp :sensor-compute-called)
-			   :push-value (compose :compute :cell-phone/sense))
-			(schedule
-				:transfer (every :minute :push-value))))
+    (infra-services
+      :encrypt (conj-resp :encrypt-called)
+      :decrypt (conj-resp :decrypt-called)
+      :power-high (fn [_] (> @cell-power-state 50))
+      :power-low (fn [_] (<= 20 @cell-power-state 50))
+      :power-vlow (fn [_] (< @cell-power-state 20))
+      :store (conj-resp :basic-store-called)
+      :compute (conj-resp :basic-compute-called)
+      :rs (conj-resp :remote-store-called)
+      :rc (conj-resp :remote-compute-called)
+      :skip (conj-resp :skip-called))
+
+    (transforms
+      :rs (pre :encrypt)
+      :rc (pre-post :encrypt :decrypt)
+      :store 
+        (bind 
+          (cond-flow :power-high (|| :ls :rs)
+                     :power-low :ls
+                     :power-vlow :skip))
+      :compute 
+        (bind 
+          (cond-flow :power-high :lc
+            :power-low :rc
+            :power-vlow :skip)))
+
+    (schedule
+      :power-drain 
+        (every :minute 
+          (fn [_]
+              (dosync 
+                (if (>= @cell-power-state 20)
+                    (do (ref-set cell-power-state (- @cell-power-state (rand-int 21)))
+                        :power-drained)
+                    :power-too-low))))
+      :daily-transfer 
+        (every :day 
+          (if (not :power-low)
+              :rs
+              :skip)))))
+
+(def sensor 
+  (rich-service 
+    (app-services
+      :compute (conj-resp :sensor-compute-called)
+      :push-value (compose :compute :cell-phone/sense))
+
+    (schedule
+      :transfer 
+      (every :minute :push-value))))
 
 (defn deploy-example-nodes []
   (rs-start)
@@ -71,4 +89,4 @@
     (deploy-instance node2 :s2 "examples.adl2/sensor")
     (deploy-instance node3 :cell-phone "examples.adl2/cell-phone")
     (deploy-instance node3 :s3 "examples.adl2/sensor")
-   [node1 node2 node3]))
+    [node1 node2 node3]))
