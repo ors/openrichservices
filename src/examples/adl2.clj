@@ -1,11 +1,11 @@
 (ns examples.adl2
   (:use rich-services.adl
 	rich-services.deployment
-	[clojure.contrib.logging :only (debug info)])
-  (:require [rich-services.services :as services]
-	    [rich-services.controller :as controller]))
+	[clojure.contrib.logging :only (debug info)]))
 
-(defn conj-resp [output]
+(defn conj-resp 
+	"Helper function to provide 'default' responses for service calls -- also useful for tracing"
+	[output]
   (fn [msg]
     (let [resp (if (coll? (get-response msg))
 		 (get-response msg)
