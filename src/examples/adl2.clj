@@ -19,7 +19,7 @@
 		 (app-services
 		  :ls (conj-resp :local-store-called)
 		  :lc (conj-resp :local-compute-called)
-		  :display (fn [rsm] 
+		  :display (fn [_] 
 			        (do (info (str "value arrived @ " (java.util.Date.) " with cell-power-state " @cell-power-state) )
 			            :cell-display-called))
 		  :sense (|| :store (compose :compute :display)))
@@ -28,7 +28,7 @@
 		  :encrypt (conj-resp :encrypt-called)
 		  :decrypt (conj-resp :decrypt-called)
 		  :power-high (fn [_] (> @cell-power-state 50))
-		  :power-low (fn [_] (some #(= % @cell-power-state) (range 20 49)))
+		  :power-low (fn [_] (<= 20 @cell-power-state 50))
 		  :power-vlow (fn [_] (< @cell-power-state 20))
 		  :store (conj-resp :basic-store-called)
 		  :compute (conj-resp :basic-compute-called)
@@ -66,5 +66,9 @@
   (let [[node1 node2 node3] (launch-nodes 3)]
     (println "deploying rich-service instances...")
     (deploy-instance node1 :cell-phone "examples.adl2/cell-phone")
-    (deploy-instance node1 :sensor "examples.adl2/sensor")
+    (deploy-instance node1 :s1 "examples.adl2/sensor")
+    (deploy-instance node2 :cell-phone"examples.adl2/cell-phone")
+    (deploy-instance node2 :s2 "examples.adl2/sensor")
+    (deploy-instance node3 :cell-phone "examples.adl2/cell-phone")
+    (deploy-instance node3 :s3 "examples.adl2/sensor")
    [node1 node2 node3]))
