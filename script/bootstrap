@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# from rich-services/
+echo "lein deps..."
+lein deps
+echo "lein uberjar..."
+lein uberjar
+echo "lein install..."
+lein install

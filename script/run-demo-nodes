@@ -1,0 +1,3 @@
+#!/bin/sh
+
+java -cp src:lib/'*' clojure.main -e "(use 'examples.adl2) (deploy-demo-nodes)"
