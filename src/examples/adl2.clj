@@ -5,7 +5,8 @@
         [clojure.contrib.shell-out :only (sh)]
         [clojure.contrib.str-utils2 :only (grep)]
         [rich-services.controller :only [get-service-controller service-controller-proxy
-					 lookup-service-fn to-uri]])
+					 lookup-service-fn to-uri]]
+        [rich-services.util :only [get-rs-param]])
   (:require [rich-services.proxy :as proxy])
   (:import [java.awt Dimension BorderLayout]
            [javax.swing JFrame JTextArea JScrollPane SwingUtilities]))
@@ -20,6 +21,16 @@
       (concat resp [output]))))
 
 (def cell-power-state (ref 100))
+
+(defn call-app-service 
+  [node uri & args]
+   (apply proxy/get-request (str "http://localhost:" (:port node) uri) args))
+
+(defn logger [msg]
+  (fn [rsm]
+    (let [resp (call-app-service {:port 8080} "/logger/log" {"msg" msg})]
+      (info (str "logger should have recorded: " msg " for rsm: " rsm))
+      (get-rs-param resp :response))))         
 
 (def cell-phone 
   (rich-service 
@@ -46,7 +57,7 @@
       :skip (conj-resp :skip-called))
 
     (transforms
-      :rs (pre :encrypt)
+      :rs (pre (compose (logger "encrypted") :encrypt))
       :rc (pre-post :encrypt :decrypt)
       :store 
         (bind 
@@ -61,7 +72,7 @@
 
     (schedule
       :power-drain 
-        (every :minute 
+        (every :second 
           (fn [_]
               (dosync 
                 (if (>= @cell-power-state 20)
@@ -82,7 +93,7 @@
 
     (schedule
       :transfer 
-      (every :minute :push-value))))
+      (every :second :push-value))))
 
 (def log (ref (JTextArea.))) 
 
@@ -134,9 +145,6 @@
       :log   swing-log-re-append
       :start init-swing-re-logger)))
 
-(defn call-app-service [node uri & args]
-  (apply proxy/get-request (str "http://localhost:" (:port node) uri) args))
- 
 (defn deploy-demo-nodes []
   (rs-start)
   (println "Sleeping while rich-service master launches...")
@@ -153,7 +161,7 @@
     (deploy-instance node3 :logger "examples.adl2/swing-re-logger")
     (deploy-instance node3 :s3 "examples.adl2/sensor")
     (Thread/sleep 4000)
-    (call-app-service node1 "/logger/start" {:port (:port node1) :left 100 :top 100 :re ""})
-    (call-app-service node2 "/logger/start" {:port (:port node2) :left 700 :top 100 :re "displayed"})
-    (call-app-service node3 "/logger/start" {:port (:port node3) :left 1300 :top 100 :re "received"})
+    (call-app-service node1 "/logger/start" {:port (:port node1) :left 100 :top 100 :re "enc"})
+    (call-app-service node2 "/logger/start" {:port (:port node2) :left 700 :top 100 :re "enc"})
+    (call-app-service node3 "/logger/start" {:port (:port node3) :left 1300 :top 100 :re "enc"})
     [node1 node2 node3]))
