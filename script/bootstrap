@@ -1,6 +1,8 @@
 #!/bin/sh
 
 # from rich-services/
+echo "cleaning logs..."
+rm -rf log/dev-*
 echo "lein deps..."
 lein deps
 echo "lein uberjar..."
