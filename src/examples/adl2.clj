@@ -7,7 +7,8 @@
         [rich-services.controller :only [get-service-controller service-controller-proxy
 					 lookup-service-fn to-uri]]
         [rich-services.util :only [get-rs-param]])
-  (:require [rich-services.proxy :as proxy])
+  (:require [rich-services.proxy :as proxy]
+            [rich-services.config :as config])
   (:import [java.awt Dimension BorderLayout]
            [javax.swing JFrame JTextArea JScrollPane SwingUtilities]))
  
@@ -22,43 +23,42 @@
 
 (def cell-power-state (ref 100))
 
-(defn call-app-service 
-  [node uri & args]
-   (apply proxy/get-request (str "http://localhost:" (:port node) uri) args))
+(defn call-service-by-uri [uri & args]
+   (apply proxy/get-request (str "http://" (config/get-hostname) ":" (config/get-app-port) uri) args))
+
+(defn call-service-on-node [node uri & args]
+   (apply proxy/get-request (str "http://" (config/get-hostname) ":" (:port node) uri) args))
 
 (defn logger [msg]
   (fn [rsm]
-    (let [resp (call-app-service {:port 8080} "/logger/log" {"msg" msg})]
-      (info (str "logger should have recorded: " msg " for rsm: " rsm))
+    (let [resp (call-service-by-uri "/logger/log" {"msg" (str (java.util.Date.) ": " msg)})]
       (get-rs-param resp :response))))         
 
 (def cell-phone 
   (rich-service 
     (app-services
-      :ls (conj-resp :local-store-called)
-      :lc (conj-resp :local-compute-called)
-      :display 
-        (fn [_] 
-            (do (info (str "value arrived @ " (java.util.Date.) " with cell-power-state " @cell-power-state) )
-                :cell-display-called))
+      :ls (logger "local store called")
+      :lc (logger "local compute called")
+      :display (logger (str "value arrived with cell-power-state " @cell-power-state))
       :sense 
         (|| :store (compose :compute :display)))
 
     (infra-services
-      :encrypt (conj-resp :encrypt-called)
-      :decrypt (conj-resp :decrypt-called)
+      :encrypt (logger "encrypt called")
+      :decrypt (logger "decrypt called")
       :power-high (fn [_] (> @cell-power-state 50))
       :power-low (fn [_] (<= 20 @cell-power-state 50))
       :power-vlow (fn [_] (< @cell-power-state 20))
-      :store (conj-resp :basic-store-called)
-      :compute (conj-resp :basic-compute-called)
-      :rs (conj-resp :remote-store-called)
-      :rc (conj-resp :remote-compute-called)
-      :skip (conj-resp :skip-called))
+      :store (logger "basic store called")
+      :compute (logger "basic compute called")
+      :rs (logger "remote store called")
+      :rc (logger "remote compute called")
+      :skip (logger "skip called"))
 
     (transforms
-      :rs (pre (compose (logger "encrypted") :encrypt))
-      :rc (pre-post :encrypt :decrypt)
+      :rs (pre (compose (logger "performing encryption before remote storage") :encrypt))
+      :rc (pre-post (compose (logger "performing encryption before remote computation") :encrypt)
+                    (compose (logger "performing decryption after receiving remote result") :decrypt))
       :store 
         (bind 
           (cond-flow :power-high (|| :ls :rs)
@@ -88,8 +88,8 @@
 (def sensor 
   (rich-service 
     (app-services
-      :compute (conj-resp :sensor-compute-called)
-      :push-value (compose :compute :cell-phone/sense :logger/log))
+      :compute (fn [-] (rand-int 100))
+      :push-value (compose :compute :cell-phone/sense))
 
     (schedule
       :transfer 
@@ -161,7 +161,7 @@
     (deploy-instance node3 :logger "examples.adl2/swing-re-logger")
     (deploy-instance node3 :s3 "examples.adl2/sensor")
     (Thread/sleep 4000)
-    (call-app-service node1 "/logger/start" {:port (:port node1) :left 100 :top 100 :re "enc"})
-    (call-app-service node2 "/logger/start" {:port (:port node2) :left 700 :top 100 :re "enc"})
-    (call-app-service node3 "/logger/start" {:port (:port node3) :left 1300 :top 100 :re "enc"})
+    (call-service-on-node node1 "/logger/start" {:port (:port node1) :left 100 :top 100 :re "enc"})
+    (call-service-on-node node2 "/logger/start" {:port (:port node2) :left 700 :top 100 :re ".*"})
+    (call-service-on-node node3 "/logger/start" {:port (:port node3) :left 1300 :top 100 :re "value"})
     [node1 node2 node3]))
