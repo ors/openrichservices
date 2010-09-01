@@ -46,7 +46,6 @@
   [msg & args]
     (fn [rsm]
       (let [resp (call-service-by-uri "/logger/log" {"msg" (str (java.util.Date.) ": " (format msg (if args (load-string (first args)) (get-response rsm))))})]
-         (info (str "responsulorum: " rsm " + " (get-response rsm)))
          (get-response rsm))))        
 
 (def cell-phone 
