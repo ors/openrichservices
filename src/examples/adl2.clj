@@ -23,23 +23,38 @@
 
 (def cell-power-state (ref 100))
 
-(defn call-service-by-uri [uri & args]
-   (apply proxy/get-request (str "http://" (config/get-hostname) ":" (config/get-app-port) uri) args))
+(defn call-service-by-uri 
+  "Finds the service specified by the uri, then calls it with the supplied args. As per
+   proxy/get-request, the lookup only defers to the master registrar if the service is not 
+   available on the current node."
+  [uri & args]
+    (apply proxy/get-request (str "http://" (config/get-hostname) ":" (config/get-app-port) uri) args))
 
-(defn call-service-on-node [node uri & args]
-   (apply proxy/get-request (str "http://" (config/get-hostname) ":" (:port node) uri) args))
+(defn call-service-on-node 
+  "Finds the service specified by the uri on the specified node, then calls it with the supplied args. As per
+   proxy/get-request, the lookup only defers to the master registrar if the service is not 
+   available on the specified node."
+  [node uri & args]
+    (apply proxy/get-request (str "http://" (config/get-hostname) ":" (:port node) uri) args))
 
-(defn logger [msg]
-  (fn [rsm]
-    (let [resp (call-service-by-uri "/logger/log" {"msg" (str (java.util.Date.) ": " msg)})]
-      (get-rs-param resp :response))))         
+(defn logger 
+  "Simple logger constructore; the supplied message, with augmentation, is submitted to the /logger/log service.
+   The message is augmented with a timestamp, and is formatted using format. Currently this only works for very
+   simple format strings, as in (logger \"example %s\"), which logs the string \"example\" followed by the 
+   value of :response on the supplied message rsm. If logger receives a second argument, then this arg is
+   evaluated and logged instead of the :response value."
+  [msg & args]
+    (fn [rsm]
+      (let [resp (call-service-by-uri "/logger/log" {"msg" (str (java.util.Date.) ": " (format msg (if args (load-string (first args)) (get-response rsm))))})]
+         (info (str "responsulorum: " rsm " + " (get-response rsm)))
+         (get-response rsm))))        
 
 (def cell-phone 
   (rich-service 
     (app-services
       :ls (logger "local store called")
       :lc (logger "local compute called")
-      :display (logger (str "value arrived with cell-power-state " @cell-power-state))
+      :display (logger "display value %s")
       :sense 
         (|| :store (compose :compute :display)))
 
@@ -67,9 +82,9 @@
       :compute 
         (bind 
           (cond-flow :power-high :lc
-            :power-low :rc
-            :power-vlow :skip)))
-
+                     :power-low :rc
+                     :power-vlow :skip)))
+    
     (schedule
       :power-drain 
         (every :second 
@@ -88,18 +103,24 @@
 (def sensor 
   (rich-service 
     (app-services
-      :compute (fn [-] (rand-int 100))
+      :compute (fn [_] (rand-int 100)) 
       :push-value (compose :compute :cell-phone/sense))
 
     (schedule
       :transfer 
       (every :second :push-value))))
 
+;; Java Swing interop
+
 (def log (ref (JTextArea.))) 
 
 (def logger-re (ref ""))
 
-(defn swing-log-re-append [rsm]
+(defn swing-log-re-append 
+  "Basic logging into the text area specified by @log. The text supplied via the 
+   rsm value of :msg is grepped against the reg exp pattern obtained via @logger-re. The
+   contents of the text area always scroll to the most recent entry."
+  [rsm]
   (do
     (SwingUtilities/invokeLater
       (fn []
@@ -111,7 +132,10 @@
               (.invalidate))))))
     rsm))
 
-(defn init-swing-re-logger [rsm]
+(defn init-swing-re-logger 
+  "Initializes the basic logging facility. Creates the Java Swing components and displays them. Parameters
+   for the initialization are extracted from the rsm map."
+  [rsm]
   (do
     (SwingUtilities/invokeLater
       (fn [] 
@@ -131,13 +155,15 @@
 
           (doto scrollpane
             (.setPreferredSize (Dimension. 560 100)))
-          (doto (JFrame. (str "Logging on port #" port))
+          (doto (JFrame. (str "Logging with reg exp \"" re "\" on port #" port))
              (.add scrollpane (. BorderLayout CENTER))
              (.setDefaultCloseOperation (. JFrame EXIT_ON_CLOSE))
              (.pack)
              (.setLocation left top)
              (.setVisible true)))))
     rsm))
+
+;; Swing-based logging rich service with rudimentary regexp support
 
 (def swing-re-logger
   (rich-service
@@ -160,8 +186,10 @@
     (deploy-instance node3 :cell-phone "examples.adl2/cell-phone")
     (deploy-instance node3 :logger "examples.adl2/swing-re-logger")
     (deploy-instance node3 :s3 "examples.adl2/sensor")
+    (println "Sleeping while instances deploy...")
     (Thread/sleep 4000)
-    (call-service-on-node node1 "/logger/start" {:port (:port node1) :left 100 :top 100 :re "enc"})
+    (println "Starting Swing loggers...")
+    (call-service-on-node node1 "/logger/start" {:port (:port node1) :left 100 :top 100 :re "enc|dec"})
     (call-service-on-node node2 "/logger/start" {:port (:port node2) :left 700 :top 100 :re ".*"})
     (call-service-on-node node3 "/logger/start" {:port (:port node3) :left 1300 :top 100 :re "value"})
     [node1 node2 node3]))

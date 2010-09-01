@@ -69,8 +69,8 @@
        (fn [message]
 	 (let [test-result (test-service message)]
 	   (if (get-response test-result)
-	     (then-service test-result)
-	     (when else-service (else-service test-result))))))))
+	     (then-service message)
+	     (when else-service (else-service message))))))))
 
 (defmacro cond-flow
   [& services]
