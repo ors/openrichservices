@@ -53,23 +53,29 @@
 
 (def logger-queue (agent []))
 
-(defn update-textarea [msgs]
+(defn- update-textarea [msgs]
+  "Writes the messages of vector msgs into the JTextArea given by text-area-log.
+   If the maximum number of rows is reached, the JTextArea is cleard; then loggin
+   continues."
   (do 
     (when-not (empty? msgs)
       (SwingUtilities/invokeLater
         (fn []
 	  (doseq [m msgs]
+            (if (= (. text-area-log getLineCount)
+                   (. text-area-log getRows))
+              (. text-area-log setText ""))
             (doto text-area-log 
               (.append m)
               (.setCaretPosition (.length (.getText text-area-log)))
               (.invalidate))))))
     []))
 
-(defn update-log [msg]
+(defn- update-log [msg]
   (do (send logger-queue conj msg)
       (send logger-queue update-textarea)))
 
-(defn swing-log-re-append 
+(defn- swing-log-re-append 
   "Basic logging into the text area specified by text-area-log. The text supplied via the 
    rsm value of :msg is grepped against the reg exp pattern obtained via logger-re. The
    contents of the text area always scroll to the most recent entry."
@@ -89,7 +95,7 @@
                 (send logger-queue update-textarea)))))
     rsm))
 
-(defn init-swing-re-logger 
+(defn- init-swing-re-logger 
   "Initializes the basic logging facility. Creates the Java Swing components and displays them. Parameters
    for the initialization are extracted from the rsm map."
   [rsm]
@@ -118,7 +124,7 @@
             (doto text-area-log
               (.setColumns 80)
               (.setRows 1000)
-              (.setLineWrap false)
+              (.setLineWrap true)
               (.setEditable false))
             (when re
               (def logger-re (re-pattern re))))
