@@ -86,12 +86,10 @@
           (= @logger-state :paused)
             (send logger-queue conj msg)
           (= @logger-state :continued)
-            (do (send logger-queue conj msg)
-                (send logger-queue update-textarea)
-                (ref-set logger-state :running))
+            (do (update-log msg)
+	        (ref-set logger-state :running))
           (= @logger-state :running)
-            (do (send logger-queue conj msg)
-                (send logger-queue update-textarea)))))
+            (do (update-log msg)))))
     rsm))
 
 (defn- init-swing-re-logger 
