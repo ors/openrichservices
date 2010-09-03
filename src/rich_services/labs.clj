@@ -1,11 +1,13 @@
 (ns rich-services.labs
   (:use rich-services.adl
 	rich-services.deployment
-        [clojure.contrib.str-utils2 :only (grep)])
+        [clojure.contrib.str-utils2 :only (grep)]
+        [clojure.contrib.logging :only [spy debug]])
   (:require [rich-services.proxy :as proxy]
             [rich-services.config :as config])
   (:import [java.awt Dimension BorderLayout]
-           [javax.swing JFrame JTextArea JScrollPane SwingUtilities]))
+           [java.awt.event ActionListener]
+           [javax.swing BoxLayout JFrame JPanel JButton JTextArea JScrollPane SwingUtilities]))
  
 (defn conj-resp 
 	"Helper function to provide 'default' responses for service calls -- also useful for tracing"
@@ -31,7 +33,7 @@
     (apply proxy/get-request (str "http://" (config/get-hostname) ":" (:port node) uri) args))
 
 (defn logger 
-  "Simple logger constructore; the supplied message, with augmentation, is submitted to the /logger/log service.
+  "Simple logger constructor; the supplied message, with augmentation, is submitted to the /logger/log service.
    The message is augmented with a timestamp, and is formatted using format. Currently this only works for very
    simple format strings, as in (logger \"example %s\"), which logs the string \"example\" followed by the 
    value of :response on the supplied message rsm. If logger receives a second argument, then this arg is
@@ -43,24 +45,48 @@
 
 ;; Java Swing interop
 
-(def log (ref (JTextArea.))) 
+(def text-area-log (JTextArea.)) 
 
-(def logger-re (ref ""))
+(def logger-re "")
+
+(def logger-state (ref :running))
+
+(def logger-queue (agent []))
+
+(defn update-textarea [msgs]
+  (do 
+    (when-not (empty? msgs)
+      (SwingUtilities/invokeLater
+        (fn []
+	  (doseq [m msgs]
+            (doto text-area-log 
+              (.append m)
+              (.setCaretPosition (.length (.getText text-area-log)))
+              (.invalidate))))))
+    []))
+
+(defn update-log [msg]
+  (do (send logger-queue conj msg)
+      (send logger-queue update-textarea)))
 
 (defn swing-log-re-append 
-  "Basic logging into the text area specified by @log. The text supplied via the 
-   rsm value of :msg is grepped against the reg exp pattern obtained via @logger-re. The
+  "Basic logging into the text area specified by text-area-log. The text supplied via the 
+   rsm value of :msg is grepped against the reg exp pattern obtained via logger-re. The
    contents of the text area always scroll to the most recent entry."
   [rsm]
-  (do
-    (SwingUtilities/invokeLater
-      (fn []
-        (do 
-          (dosync 
-            (doto @log 
-              (.append (apply str (grep (re-pattern @logger-re) [(str (get-resp-or-param rsm :msg) "\n")])))
-              (.setCaretPosition (.length (.getText @log)))
-              (.invalidate))))))
+  (dosync  
+    (let [msg (apply str (grep logger-re [(str (get-resp-or-param rsm :msg) "\n")]))]
+      (when-not (= @logger-state :stopped)
+        (cond
+          (= @logger-state :paused)
+            (send logger-queue conj msg)
+          (= @logger-state :continued)
+            (do (send logger-queue conj msg)
+                (send logger-queue update-textarea)
+                (ref-set logger-state :running))
+          (= @logger-state :running)
+            (do (send logger-queue conj msg)
+                (send logger-queue update-textarea)))))
     rsm))
 
 (defn init-swing-re-logger 
@@ -70,28 +96,79 @@
   (do
     (SwingUtilities/invokeLater
       (fn [] 
-        (let [port     (get-param rsm :port)
-              left     (get-param-as-int rsm :left)
-              top      (get-param-as-int rsm :top)
-              re       (get-param rsm :re)
-              scrollpane (JScrollPane. @log)]
+        (let [port        (get-param rsm :port)
+              left        (get-param-as-int rsm :left)
+              top         (get-param-as-int rsm :top)
+              re          (get-param rsm :re)
+              buttonpanel (JPanel.) 
+              stopbutton  (JButton. "STOP")
+              pausebutton (JButton. "PAUSE")
+              playbutton  (JButton. "PLAY")
+              scrollpane  (JScrollPane. text-area-log)
+              mainpanel   (JPanel.)
+              r-prefix    "[RUNNING] "
+              p-prefix    "[PAUSED]  "
+              s-prefix    "[STOPPED] "
+              t-prefix    (ref r-prefix)
+              t-suffix    (str "Logging with reg exp \"" re "\" on port #" port)
+              title       (agent (str @t-prefix t-suffix))
+              frame       (JFrame. @title)
+              change-title (fn [title] (let [new-title (str @t-prefix t-suffix)] (. frame setTitle new-title) new-title))]
           (dosync 
-            (doto @log
+            (doto text-area-log
               (.setColumns 80)
-              (.setRows 50)
+              (.setRows 1000)
               (.setLineWrap false)
               (.setEditable false))
             (when re
-              (ref-set logger-re re)))
-
+              (def logger-re (re-pattern re))))
+          (doto playbutton
+            (.addActionListener 
+              (proxy [ActionListener] []
+                (actionPerformed [event] 
+                  (dosync 
+                    (when (or (= @logger-state :paused)
+                              (= @logger-state :stopped))
+                      (ref-set logger-state :continued)
+                      (ref-set t-prefix r-prefix)
+                      (send title change-title)))))))
+          (doto pausebutton
+            (.addActionListener 
+              (proxy [ActionListener] []
+                (actionPerformed [event] 
+                  (do
+                    (dosync 
+                      (when (= @logger-state :running)
+                        (ref-set logger-state :paused)
+                        (ref-set t-prefix p-prefix)
+                        (send title change-title))))))))
+          (doto stopbutton
+            (.addActionListener 
+              (proxy [ActionListener] []
+                (actionPerformed [event] 
+                  (dosync 
+                    (ref-set logger-state :stopped)
+                    (ref-set t-prefix s-prefix)
+                    (send title change-title))))))
+          (doto buttonpanel
+            (.setLayout (BoxLayout. buttonpanel (. BoxLayout X_AXIS)))
+            (.add pausebutton)
+            (.add stopbutton)
+            (.add playbutton))
           (doto scrollpane
             (.setPreferredSize (Dimension. 560 100)))
-          (doto (JFrame. (str "Logging with reg exp \"" re "\" on port #" port))
-             (.add scrollpane (. BorderLayout CENTER))
+          (doto mainpanel
+            (.setLayout (BoxLayout. mainpanel (. BoxLayout Y_AXIS)))
+            (.add buttonpanel)
+            (.add scrollpane (. BorderLayout CENTER)))
+          (doto frame
+             (.add mainpanel)
              (.setDefaultCloseOperation (. JFrame EXIT_ON_CLOSE))
              (.pack)
              (.setLocation left top)
-             (.setVisible true)))))
+             (.setVisible true))
+          (dosync 
+            (ref-set logger-state :running)))))
     rsm))
 
 ;; Swing-based logging rich service with rudimentary regexp support
