@@ -1,7 +1,7 @@
 (ns examples.adl2
   (:use rich-services.adl
 	rich-services.deployment
-        [rich-services.labs :only [conj-resp call-service-by-uri call-service-on-node logger swing-re-logger]]))
+        [rich-services.labs :only [call-service-on-node logger swing-re-logger]]))
  
 (def cell-power-state (ref 100))
 
@@ -47,7 +47,7 @@
           (fn [_]
               (dosync 
                 (if (>= @cell-power-state 20)
-                    (do (ref-set cell-power-state (- @cell-power-state (rand-int 21)))
+                    (do (alter cell-power-state - (rand-int 21))
                         :power-drained)
                     :power-too-low))))
       :daily-transfer 
@@ -61,7 +61,7 @@
 (def sensor 
   (rich-service 
     (app-services
-      :compute (fn [_] (dosync (ref-set svalue (inc @svalue))))
+      :compute (fn [_] (dosync (alter svalue inc)))
       :push-value (compose :compute :cell-phone/sense))
 
     (schedule
