@@ -1,8 +1,7 @@
 (ns rich-services.labs
   (:use rich-services.adl
 	rich-services.deployment
-        [clojure.contrib.str-utils2 :only (grep)]
-        [clojure.contrib.logging :only [spy debug]])
+        [clojure.contrib.str-utils2 :only (grep)])
   (:require [rich-services.proxy :as proxy]
             [rich-services.config :as config])
   (:import [java.awt Dimension BorderLayout]
