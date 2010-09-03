@@ -1,7 +1,9 @@
 (ns examples.adl2
   (:use rich-services.adl
 	rich-services.deployment
-        [rich-services.labs :only [call-service-on-node logger swing-re-logger]]))
+        [rich-services.labs.interop :only [call-service-on-node]]
+        [rich-services.labs.loggers.core :only [logger]]
+        [rich-services.labs.loggers.swinglogger :only [swing-re-logger]]))
  
 (def cell-power-state (ref 100))
 
@@ -76,12 +78,12 @@
     (println "deploying rich-service instances...")
     (deploy-instance node1 :cell-phone "examples.adl2/cell-phone")
     (deploy-instance node1 :s1 "examples.adl2/sensor")
-    (deploy-instance node1 :logger "rich-services.labs/swing-re-logger")
+    (deploy-instance node1 :logger "rich-services.labs.loggers.swinglogger/swing-re-logger")
     (deploy-instance node2 :cell-phone "examples.adl2/cell-phone")
-    (deploy-instance node2 :logger "rich-services.labs/swing-re-logger")
+    (deploy-instance node2 :logger "rich-services.labs.loggers.swinglogger/swing-re-logger")
     (deploy-instance node2 :s2 "examples.adl2/sensor")
     (deploy-instance node3 :cell-phone "examples.adl2/cell-phone")
-    (deploy-instance node3 :logger "rich-services.labs/swing-re-logger")
+    (deploy-instance node3 :logger "rich-services.labs.loggers.swinglogger/swing-re-logger")
     (deploy-instance node3 :s3 "examples.adl2/sensor")
     (println "Sleeping while instances deploy...")
     (Thread/sleep 4000)
