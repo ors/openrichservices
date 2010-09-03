@@ -56,10 +56,12 @@
               :rs
               :skip)))))
 
+(def svalue (ref 0))
+
 (def sensor 
   (rich-service 
     (app-services
-      :compute (fn [_] (rand-int 100)) 
+      :compute (fn [_] (dosync (ref-set svalue (inc @svalue))))
       :push-value (compose :compute :cell-phone/sense))
 
     (schedule
